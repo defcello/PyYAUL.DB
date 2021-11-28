@@ -161,20 +161,35 @@ if sqlalchemy is not None:
 				# print(f'Columns have different `unique` states: {lhs.unique=}; {rhs.unique=}')
 				# return False
 			if not(lhs.primary_key) and lhs.server_default != rhs.server_default:
-				print(f'Columns have different `server_default` values: {lhs.server_default=}; {rhs.server_default=}')
-				return False
+				if lhs.server_default is not None and rhs.server_default is not None and lhs.server_default.has_argument and rhs.server_default.has_argument:
+					try:
+						if str(lhs.server_default.arg) != str(rhs.server_default.arg):
+							print(
+								f'Columns have different `server_default.arg` values: lhs.server_default.arg = {str(lhs.server_default.arg)}; rhs.server_default.arg = {str(rhs.server_default.arg)}'
+							)
+							return False
+					except:
+						print(f'Columns have different `server_default` values: {lhs.server_default=}; {rhs.server_default=}')
+						return False
+				else:
+					print(f'Columns have different `server_default` values: {lhs.server_default=}; {rhs.server_default=}')
+					return False
 			if lhs.server_onupdate != rhs.server_onupdate:
 				print(f'Columns have different `server_onupdate` values: {lhs.server_onupdate=}; {rhs.server_onupdate=}')
 				return False
 			if type(lhs.type.as_generic()) != type(rhs.type.as_generic()):
 				print(f'Columns have different types: {type(lhs.type.as_generic())=}; {type(rhs.type.as_generic())=}')
 				return False
-			if isinstance(lhs.type.as_generic(), String):
+			if isinstance(lhs.type.as_generic(), Integer):
+				pass  #No additional processing required.
+			elif isinstance(lhs.type.as_generic(), sqlalchemy.types.DateTime):
+				if lhs.type.timezone != rhs.type.timezone:
+					print(f'Columns have different timezone settings: {lhs.type.timezone=}; {rhs.type.timezone=}')
+					return False
+			elif isinstance(lhs.type.as_generic(), String):
 				if lhs.type.length != rhs.type.length:
 					print(f'Columns have different lengths: {lhs.type.length=}; {rhs.type.length=}')
 					return False
-			elif isinstance(lhs.type.as_generic(), Integer):
-				pass
 			else:
 				print(f'Columns have unexpected type: {lhs.type.as_generic()=}')
 				return False
