@@ -156,41 +156,41 @@ if sqlalchemy is not None:
                 print(f'Columns do not match: {lhs.name=}; {rhs.name=}')
                 return False
             if lhs.primary_key != rhs.primary_key:
-                print(f'Columns have different `primary_key` states: {lhs.primary_key=}; {rhs.primary_key=}')
+                print(f'Columns have different `primary_key` states: {lhs.primary_key=}; {rhs.primary_key=}; {lhs.name=}; {rhs.name=}')
                 return False
             #`reflect` does not capture this.  Will have to use `Inspector`: https://stackoverflow.com/a/33898867/2201287
             # if lhs.unique != rhs.unique:
-                # print(f'Columns have different `unique` states: {lhs.unique=}; {rhs.unique=}')
+                # print(f'Columns have different `unique` states: {lhs.unique=}; {rhs.unique=}; {lhs.name=}; {rhs.name=}')
                 # return False
             if not(lhs.primary_key) and lhs.server_default != rhs.server_default:
                 if lhs.server_default is not None and rhs.server_default is not None and lhs.server_default.has_argument and rhs.server_default.has_argument:
                     try:
                         if str(lhs.server_default.arg) != str(rhs.server_default.arg):
                             print(
-                                f'Columns have different `server_default.arg` values: lhs.server_default.arg = {str(lhs.server_default.arg)}; rhs.server_default.arg = {str(rhs.server_default.arg)}'
+                                f'Columns have different `server_default.arg` values: lhs.server_default.arg = {str(lhs.server_default.arg)}; rhs.server_default.arg = {str(rhs.server_default.arg)}; {lhs.name=}; {rhs.name=}'
                             )
                             return False
                     except:
-                        print(f'Columns have different `server_default` values: {lhs.server_default=}; {rhs.server_default=}')
+                        print(f'Columns have different `server_default` values: {lhs.server_default=}; {rhs.server_default=}; {lhs.name=}; {rhs.name=}')
                         return False
                 else:
-                    print(f'Columns have different `server_default` values: {lhs.server_default=}; {rhs.server_default=}')
+                    print(f'Columns have different `server_default` values: {lhs.server_default=}; {rhs.server_default=}; {lhs.name=}; {rhs.name=}')
                     return False
             if lhs.server_onupdate != rhs.server_onupdate:
-                print(f'Columns have different `server_onupdate` values: {lhs.server_onupdate=}; {rhs.server_onupdate=}')
+                print(f'Columns have different `server_onupdate` values: {lhs.server_onupdate=}; {rhs.server_onupdate=}; {lhs.name=}; {rhs.name=}')
                 return False
             if type(lhs.type.as_generic()) != type(rhs.type.as_generic()):
-                print(f'Columns have different types: {type(lhs.type.as_generic())=}; {type(rhs.type.as_generic())=}')
+                print(f'Columns have different types: {type(lhs.type.as_generic())=}; {type(rhs.type.as_generic())=}; {lhs.name=}; {rhs.name=}')
                 return False
             if isinstance(lhs.type.as_generic(), (Boolean, Integer)):
                 pass  #No additional processing required.
             elif isinstance(lhs.type.as_generic(), sqlalchemy.types.DateTime):
                 if lhs.type.timezone != rhs.type.timezone:
-                    print(f'Columns have different timezone settings: {lhs.type.timezone=}; {rhs.type.timezone=}')
+                    print(f'Columns have different timezone settings: {lhs.type.timezone=}; {rhs.type.timezone=}; {lhs.name=}; {rhs.name=}')
                     return False
             elif isinstance(lhs.type.as_generic(), String):
                 if lhs.type.length != rhs.type.length:
-                    print(f'Columns have different lengths: {lhs.type.length=}; {rhs.type.length=}')
+                    print(f'Columns have different lengths: {lhs.type.length=}; {rhs.type.length=}; {lhs.name=}; {rhs.name=}')
                     return False
             else:
                 print(f'Columns have unexpected type: {lhs.type.as_generic()=}')
