@@ -10,10 +10,13 @@ except ImportError:
 try:
     import sqlalchemy
     from sqlalchemy import Boolean, Column, Integer, String, text
+    from sqlalchemy.engine import Connection
+    from sqlalchemy.engine.base import Engine
     from sqlalchemy.schema import MetaData, Table
 except ImportError:
     print('Failed to find SQLAlchemy installed.  Some features of `pyyaul.db.version` will be unavailable.')
     sqlalchemy = None
+from textwrap import dedent as d
 
 
 
@@ -98,6 +101,61 @@ if sqlalchemy is not None:
             self.metadata = MetaData()
             self._initMetaData(self.metadata)
 
+        def compareTables(self, lhs, rhs):
+            if lhs.name != rhs.name:
+                print(f'Tables do not match: {lhs.name=}; {rhs.name=}')
+                return False
+            for (lhsColumn, rhsColumn) in zip(lhs.columns.values(), rhs.columns.values()):
+                if not self.compareColumns(lhsColumn, rhsColumn):
+                    return False
+            return True
+
+        def compareColumns(self, lhs, rhs):
+            if lhs.name != rhs.name:
+                print(f'Columns do not match: {lhs.name=}; {rhs.name=}')
+                return False
+            if lhs.primary_key != rhs.primary_key:
+                print(f'Columns have different `primary_key` states: {lhs.primary_key=}; {rhs.primary_key=}')
+                return False
+            #`reflect` does not capture this.  Will have to use `Inspector`: https://stackoverflow.com/a/33898867/2201287
+            # if lhs.unique != rhs.unique:
+                # print(f'Columns have different `unique` states: {lhs.unique=}; {rhs.unique=}')
+                # return False
+            if not(lhs.primary_key) and lhs.server_default != rhs.server_default:
+                if lhs.server_default is not None and rhs.server_default is not None and lhs.server_default.has_argument and rhs.server_default.has_argument:
+                    try:
+                        if str(lhs.server_default.arg) != str(rhs.server_default.arg):
+                            print(
+                                f'Columns have different `server_default.arg` values: lhs.server_default.arg = {str(lhs.server_default.arg)}; rhs.server_default.arg = {str(rhs.server_default.arg)}'
+                            )
+                            return False
+                    except:
+                        print(f'Columns have different `server_default` values: {lhs.server_default=}; {rhs.server_default=}')
+                        return False
+                else:
+                    print(f'Columns have different `server_default` values: {lhs.server_default=}; {rhs.server_default=}')
+                    return False
+            if lhs.server_onupdate != rhs.server_onupdate:
+                print(f'Columns have different `server_onupdate` values: {lhs.server_onupdate=}; {rhs.server_onupdate=}')
+                return False
+            if type(lhs.type.as_generic()) != type(rhs.type.as_generic()):
+                print(f'Columns have different types: {type(lhs.type.as_generic())=}; {type(rhs.type.as_generic())=}')
+                return False
+            if isinstance(lhs.type.as_generic(), (Boolean, Integer)):
+                pass  #No additional processing required.
+            elif isinstance(lhs.type.as_generic(), sqlalchemy.types.DateTime):
+                if lhs.type.timezone != rhs.type.timezone:
+                    print(f'Columns have different timezone settings: {lhs.type.timezone=}; {rhs.type.timezone=}')
+                    return False
+            elif isinstance(lhs.type.as_generic(), String):
+                if lhs.type.length != rhs.type.length:
+                    print(f'Columns have different lengths: {lhs.type.length=}; {rhs.type.length=}')
+                    return False
+            else:
+                print(f'Columns have unexpected type: {lhs.type.as_generic()=}')
+                return False
+            return True
+
         def _initMetaData(self, metadata):
             """
             Populates `metadata` with the schema for this database version.
@@ -106,7 +164,7 @@ if sqlalchemy is not None:
             """
             raise NotImplementedError()
 
-        def _initialize(self, engine):
+        def _initialize(self, engine :Engine) ->Engine:
             """
             Initializes the database in engine to have the entities described in
             `self.metadata`.
@@ -114,7 +172,7 @@ if sqlalchemy is not None:
             self.metadata.create_all(engine)
             return engine
 
-        def matches(self, engine):
+        def matches(self, engine :Engine) ->bool:
             """
             Tests the database behind `engine` and returns `True` if it matches this
             version.
@@ -140,74 +198,71 @@ if sqlalchemy is not None:
                     ret = False
             return ret
 
-        def compareTables(self, lhs, rhs):
-            if lhs.name != rhs.name:
-                print(f'Tables do not match: {lhs.name=}; {rhs.name=}')
-                return False
-            lhsColumns = sorted(lhs.columns.values(), key=lambda item: item.name)
-            rhsColumns = sorted(rhs.columns.values(), key=lambda item: item.name)
-            for (lhsColumn, rhsColumn) in zip(lhsColumns, rhsColumns):
-                if not self.compareColumns(lhsColumn, rhsColumn):
-                    return False
-            return True
-
-        def compareColumns(self, lhs, rhs):
-            if lhs.name != rhs.name:
-                print(f'Columns do not match: {lhs.name=}; {rhs.name=}')
-                return False
-            if lhs.primary_key != rhs.primary_key:
-                print(f'Columns have different `primary_key` states: {lhs.primary_key=}; {rhs.primary_key=}; {lhs.name=}; {rhs.name=}')
-                return False
-            #`reflect` does not capture this.  Will have to use `Inspector`: https://stackoverflow.com/a/33898867/2201287
-            # if lhs.unique != rhs.unique:
-                # print(f'Columns have different `unique` states: {lhs.unique=}; {rhs.unique=}; {lhs.name=}; {rhs.name=}')
-                # return False
-            if not(lhs.primary_key) and lhs.server_default != rhs.server_default:
-                if lhs.server_default is not None and rhs.server_default is not None and lhs.server_default.has_argument and rhs.server_default.has_argument:
-                    try:
-                        if str(lhs.server_default.arg) != str(rhs.server_default.arg):
-                            print(
-                                f'Columns have different `server_default.arg` values: lhs.server_default.arg = {str(lhs.server_default.arg)}; rhs.server_default.arg = {str(rhs.server_default.arg)}; {lhs.name=}; {rhs.name=}'
-                            )
-                            return False
-                    except:
-                        print(f'Columns have different `server_default` values: {lhs.server_default=}; {rhs.server_default=}; {lhs.name=}; {rhs.name=}')
-                        return False
-                else:
-                    print(f'Columns have different `server_default` values: {lhs.server_default=}; {rhs.server_default=}; {lhs.name=}; {rhs.name=}')
-                    return False
-            if lhs.server_onupdate != rhs.server_onupdate:
-                print(f'Columns have different `server_onupdate` values: {lhs.server_onupdate=}; {rhs.server_onupdate=}; {lhs.name=}; {rhs.name=}')
-                return False
-            if type(lhs.type.as_generic()) != type(rhs.type.as_generic()):
-                print(f'Columns have different types: {type(lhs.type.as_generic())=}; {type(rhs.type.as_generic())=}; {lhs.name=}; {rhs.name=}')
-                return False
-            if isinstance(lhs.type.as_generic(), (Boolean, Integer)):
-                pass  #No additional processing required.
-            elif isinstance(lhs.type.as_generic(), sqlalchemy.types.DateTime):
-                if lhs.type.timezone != rhs.type.timezone:
-                    print(f'Columns have different timezone settings: {lhs.type.timezone=}; {rhs.type.timezone=}; {lhs.name=}; {rhs.name=}')
-                    return False
-            elif isinstance(lhs.type.as_generic(), String):
-                if lhs.type.length != rhs.type.length:
-                    print(f'Columns have different lengths: {lhs.type.length=}; {rhs.type.length=}; {lhs.name=}; {rhs.name=}')
-                    return False
-            else:
-                print(f'Columns have unexpected type: {lhs.type.as_generic()=}')
-                return False
-            return True
-
-        def _update(self, obj):
+        def schema_create(
+                self,
+                connection :Connection,
+                schema :str,
+                replaceExisting :bool =False,
+        ):
             """
-            Internal logic for updating `obj` to this version.  Should
-            always return the updated version of `obj`, even if `obj` is
+            Creates the given `schema` in the database behind `connection`.
+
+            If `replaceExisting` is `True`, any existing schema with the same
+            name will be dropped and recreated.
+            """
+            if replaceExisting:
+                try:
+                    drop_schema_sql = sqlalchemy.text(d(f"""
+                        DROP SCHEMA IF EXISTS {schema} CASCADE
+                        ;
+                    """))
+                    connection.execute(drop_schema_sql)
+                    print(f'Schema "{schema}": Dropped existing schema.')
+                except SQLAlchemyError as e:
+                    print(f'ERROR dropping existing schema "{schema}": {e}')
+                    raise
+            try:
+                create_schema_sql = sqlalchemy.text(f'CREATE SCHEMA {schema};')
+                connection.execute(create_schema_sql)
+                print(f'Schema "{schema}": Created successfully.')
+            except SQLAlchemyError as e:
+                print(f'ERROR creating schema "{schema}": {e}')
+                raise
+
+        def schema_exists(self, connection :Connection, schema :str) ->bool:
+            query = sqlalchemy.text(d(f"""
+                SELECT
+                    1
+                    FROM information_schema.schemata
+                    WHERE schema_name = :schema
+                ;
+            """))
+            result = connection.execute(query, {'schema': schema}).fetchone()
+            return result is not None
+
+        def table_exists(self, connection :Connection, schema, table):
+            query = sqlalchemy.text(d(f"""
+                SELECT
+                    1
+                    FROM information_schema.tables
+                    WHERE table_schema = :schema
+                        AND table_name = :table
+                ;
+            """))
+            result = connection.execute(query, {'schema': schema, 'table': table}).fetchone()
+            return result is not None
+
+        def _update(self, engine :Engine) ->Engine:
+            """
+            Internal logic for updating `engine` to the this version.  Should
+            always return the updated version of `engine`, even if `engine` is
             modified in place.
 
             Subclasses should override this method.
             """
             raise NotImplementedError()
 
-        def _updateAddColumn(self, engine, table, column):
+        def _updateAddColumn(self, engine :Engine, table, column):
             """
             Utility method for adding a column to a table.
             """
@@ -215,6 +270,8 @@ if sqlalchemy is not None:
             columnName = column.compile(dialect=engine.dialect)
             columnType = column.type.compile(dialect=engine.dialect)
             with engine.begin() as cursor:
-                cursor.execute(text(
-                    f'ALTER TABLE {table.schema}.{table.name} ADD COLUMN {columnName} {columnType};'
-                ))
+                cursor.execute(text(d(f"""
+                    ALTER TABLE {table.schema}.{table.name}
+                        ADD COLUMN {columnName} {columnType}
+                    ;
+                """)))
