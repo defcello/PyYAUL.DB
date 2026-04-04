@@ -1,13 +1,15 @@
 # PyYAUL.DB
-Yet Another Utility Library.  A collection of utility functions/modules for
-Python.
+PyYAUL stands for "Yet Another Utility Library," a nod to YAML's original
+acronym, "Yet Another Markup Language." It is a collection of utility
+functions/modules for Python.
 
 PyYAUL is designed to be split into component libraries that can be used
 independently or together.  All component libraries will start with the root
 import "pyyaul".
 
-This is the "DB" component that extends ["PyYAUL.Base"](https://github.com/defcello/PyYAUL.Base)
-with features specific to databases.
+This is the "DB" component. It extends
+["PyYAUL.Base"](https://github.com/defcello/PyYAUL.Base) with utilities and
+helpers specific to database-backed applications.
 
 ====================================================================================================
 
@@ -51,4 +53,6 @@ There are options, but here's what I typically do:
        sys.path.append(str((pathlib.Path(__file__).parent / 'lib' / 'pyyauldb').resolve()))
    ```
 
-Ultimately, get the root folders of ["PyYAUL.Base"](https://github.com/defcello/PyYAUL.Base) and "PyYAUL.DB" in Python's `sys.path`.
+Ultimately, get the root folders of
+["PyYAUL.Base"](https://github.com/defcello/PyYAUL.Base) and
+["PyYAUL.DB"](https://github.com/defcello/PyYAUL.DB) in Python's `sys.path`.
