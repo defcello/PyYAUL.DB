@@ -9,9 +9,10 @@ except ImportError:
     raise
 try:
     import sqlalchemy
-    from sqlalchemy import Boolean, Column, Integer, String, text
+    from sqlalchemy import Boolean, Column, Integer, String, select, text
     from sqlalchemy.engine import Connection
     from sqlalchemy.engine.base import Engine
+    from sqlalchemy.exc import SQLAlchemyError
     from sqlalchemy.schema import MetaData, Table
 except ImportError:
     print('Failed to find SQLAlchemy installed.  Some features of `pyyaul.db.version` will be unavailable.')
@@ -93,6 +94,9 @@ if sqlalchemy is not None:
         clsPrev = None
         #Set `clsPrev` to the `pyyaul.base.version.Version` CLASS
         #matching the previous schema version for your database.
+        schema_id = None
+        _version_schema = None
+        _version_table_name = '_pyyaul_schema_version'
 
         metadata = None  #`sqlalchemy.schema.metadata` object storing the schema definition.
 
@@ -105,10 +109,72 @@ if sqlalchemy is not None:
             if lhs.name != rhs.name:
                 print(f'Tables do not match: {lhs.name=}; {rhs.name=}')
                 return False
+            if len(lhs.columns) != len(rhs.columns):
+                print(f'Tables have different column counts: {len(lhs.columns)=}; {len(rhs.columns)=}')
+                return False
             for (lhsColumn, rhsColumn) in zip(lhs.columns.values(), rhs.columns.values()):
                 if not self.compareColumns(lhsColumn, rhsColumn):
                     return False
             return True
+
+        @classmethod
+        def get_schema_id(cls):
+            if cls.schema_id is not None:
+                return cls.schema_id
+            return cls.__qualname__
+
+        def get_version_schema(self):
+            if self._version_schema is not None:
+                return self._version_schema
+            for schemaTable in self.metadata.tables.values():
+                return schemaTable.schema
+            return None
+
+        def get_version_table(self):
+            return Table(
+                self._version_table_name,
+                MetaData(),
+                Column('schema_class', String, primary_key=True),
+                Column('version', Integer, nullable=False),
+                schema=self.get_version_schema(),
+            )
+
+        def get_stored_schema_version(self, engine :Engine):
+            versionTable = self.get_version_table()
+            inspector = sqlalchemy.inspect(engine)
+            if not inspector.has_table(versionTable.name, schema=versionTable.schema):
+                return None
+            with engine.connect() as connection:
+                result = connection.execute(
+                    select(versionTable.c.version).where(
+                        versionTable.c.schema_class == self.__class__.get_schema_id()
+                    )
+                ).scalar_one_or_none()
+            return result
+
+        def set_stored_schema_version(self, engine :Engine):
+            versionTable = self.get_version_table()
+            versionTable.create(engine, checkfirst=True)
+            schema_id = self.__class__.get_schema_id()
+            with engine.begin() as connection:
+                existing_version = connection.execute(
+                    select(versionTable.c.version).where(
+                        versionTable.c.schema_class == schema_id
+                    )
+                ).scalar_one_or_none()
+                if existing_version is None:
+                    connection.execute(
+                        versionTable.insert().values(
+                            schema_class=schema_id,
+                            version=self.schema_version,
+                        )
+                    )
+                else:
+                    connection.execute(
+                        versionTable.update().where(
+                            versionTable.c.schema_class == schema_id
+                        ).values(version=self.schema_version)
+                    )
 
         def compareColumns(self, lhs, rhs):
             if lhs.name != rhs.name:
@@ -170,6 +236,7 @@ if sqlalchemy is not None:
             `self.metadata`.
             """
             self.metadata.create_all(engine)
+            self.set_stored_schema_version(engine)
             return engine
 
         def matches(self, engine :Engine) ->bool:
@@ -262,16 +329,33 @@ if sqlalchemy is not None:
             """
             raise NotImplementedError()
 
+        def update(self, engine :Engine) ->Engine:
+            engine = super().update(engine)
+            self.set_stored_schema_version(engine)
+            return engine
+
+        def version(self, engine):
+            stored_schema_version = self.get_stored_schema_version(engine)
+            if stored_schema_version is not None:
+                versionClass = self.__class__.version_class_from_schema_version(stored_schema_version)
+                if versionClass is not None and versionClass().matches(engine):
+                    return versionClass
+            return super().version(engine)
+
         def _updateAddColumn(self, engine :Engine, table, column):
             """
             Utility method for adding a column to a table.
             """
             #Source: https://stackoverflow.com/a/17243132/2201287
-            columnName = column.compile(dialect=engine.dialect)
+            columnName = column.name
             columnType = column.type.compile(dialect=engine.dialect)
+            if table.schema is None:
+                tableName = table.name
+            else:
+                tableName = f'{table.schema}.{table.name}'
             with engine.begin() as cursor:
                 cursor.execute(text(d(f"""
-                    ALTER TABLE {table.schema}.{table.name}
+                    ALTER TABLE {tableName}
                         ADD COLUMN {columnName} {columnType}
                     ;
                 """)))
