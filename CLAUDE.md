@@ -26,7 +26,10 @@ pyyaul/db/
 ## Key Rules
 
 - **`vLatest.py` must export an instance, not a class**: `Schema = v0.SchemaV0()` not `Schema = v0.SchemaV0`
-- **`_initMetaData` must declare the full schema for that version** — not just the delta
+- **`_initMetaData` pattern depends on the version:**
+  - **v0 (base)**: declare the full schema — all tables and columns
+  - **vN (incremental, adding columns to an existing table)**: call `super()._initMetaData(metadata)` to inherit the parent schema, then re-declare only the table with just the new columns and `extend_existing=True`
+  - **vN (incremental, adding a new table)**: call `super()._initMetaData(metadata)`, then declare the new table normally (no `extend_existing`)
 - **`_update` handles only the incremental migration** (e.g., `ALTER TABLE ADD COLUMN`)
 - Always import schema from `vLatest` in consumers, never from a specific `vN` module
 

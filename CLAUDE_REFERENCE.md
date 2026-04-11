@@ -24,19 +24,19 @@ class SchemaV0(Version):
         )
 ```
 
-To add a v1 migration, declare the full v1 schema in `_initMetaData` and implement `_update` for the incremental SQL:
+To add a v1 migration that adds a column to an existing table, call `super()._initMetaData(metadata)` to inherit the parent schema, then re-declare only the table with the new column(s) and `extend_existing=True`:
 
 ```python
 class SchemaV1(Version):
     clsPrev = SchemaV0  # Points to the previous version
 
     def _initMetaData(self, metadata):
+        super()._initMetaData(metadata)  # inherit v0 tables
         Table(
             'table_user',
             metadata,
-            Column('id', Integer, primary_key=True),
-            Column('email', String(100)),
-            Column('display_name', String(200)),  # New column
+            Column('display_name', String(200)),  # New column only
+            extend_existing=True,
             schema='my_schema',
         )
 
@@ -48,6 +48,12 @@ class SchemaV1(Version):
         )
         return engine
 ```
+
+**When to use each pattern:**
+
+- **Adding columns to an existing table**: use `super()._initMetaData(metadata)` + `extend_existing=True` with only the new columns (as above)
+- **Adding a brand-new table**: use `super()._initMetaData(metadata)`, then declare the new table normally (no `extend_existing`)
+- **Full re-declaration** (listing all columns again without `extend_existing`) is no longer recommended — it silently diverges from the parent if the parent version later grows
 
 ## `update(engine)` Flow
 
